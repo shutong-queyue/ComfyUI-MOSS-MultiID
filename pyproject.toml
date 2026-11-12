@@ -1,0 +1,23 @@
+[project]
+name = "moss-multiid"
+description = "Regional LoRA for MOSS-Image: each LoRA only acts inside the region you assign, so multiple character LoRAs stop cross-contaminating faces."
+version = "1.0.0"
+license = { file = "LICENSE" }
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Environment :: GPU :: NVIDIA CUDA",
+]
+dependencies = [
+    "insightface",
+    "onnxruntime",
+    "opencv-python",
+]
+
+[project.urls]
+Repository = "https://github.com/shutong-queyue/ComfyUI-MOSS-MultiID"
+
+[tool.comfy]
+PublisherId = "shutong-queyue"
+DisplayName = "ComfyUI-MOSS-MultiID"
+Icon = ""
+includes = []
