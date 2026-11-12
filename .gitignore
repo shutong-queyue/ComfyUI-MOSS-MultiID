@@ -1,0 +1,13 @@
+# 密钥文件绝对不要提交
+api_config.json
+
+# 本地开发脚本与中间产物，不属于发布内容
+dev/
+
+# Python
+__pycache__/
+*.pyc
+
+# ComfyUI 运行时产物
+*.log
+output/

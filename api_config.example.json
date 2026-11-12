@@ -1,0 +1,5 @@
+{
+  "api_key": "把你在在线接口那边申请的密钥粘贴到这里",
+  "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "说明": "只有用「一句话转构图·API版」才需要。把本文件复制成 api_config.json 再填密钥；api_config.json 不要提交到公开仓库。不填也能用——本地 Ollama 那条路不需要密钥。"
+}

@@ -1,0 +1,1146 @@
+{
+ "last_node_id": 24,
+ "last_link_id": 28,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UNETLoader",
+   "pos": [
+    60,
+    60
+   ],
+   "size": [
+    340,
+    110
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "title": "底模（SFT）",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UNETLoader"
+   },
+   "widgets_values": [
+    "moss_image_sft_int8_convrot.safetensors",
+    "default"
+   ]
+  },
+  {
+   "id": 2,
+   "type": "CLIPLoader",
+   "pos": [
+    60,
+    204
+   ],
+   "size": [
+    340,
+    112
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "title": "文字理解",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   },
+   "widgets_values": [
+    "qwen3.5_9b_int8_convrot.safetensors",
+    "moss_image",
+    "default"
+   ]
+  },
+  {
+   "id": 3,
+   "type": "VAELoader",
+   "pos": [
+    60,
+    350
+   ],
+   "size": [
+    340,
+    110
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "title": "图像解码",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "flux2-vae_small.safetensors"
+   ]
+  },
+  {
+   "id": 4,
+   "type": "LoraLoader",
+   "pos": [
+    470,
+    60
+   ],
+   "size": [
+    340,
+    112
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "title": "8步加速滤镜（全局）",
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 1,
+     "label": "MODEL"
+    },
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2,
+     "label": "CLIP"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": []
+    },
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoader"
+   },
+   "widgets_values": [
+    "MOSS-Image-SFT-8-steps.safetensors",
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "id": 5,
+   "type": "CLIPTextEncode",
+   "pos": [
+    470,
+    206
+   ],
+   "size": [
+    400,
+    240
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "title": "① 你的原话（逐字，两趟共用）",
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 3,
+     "label": "CLIP"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "俯视视角，第一人称，我蹲下来摸着两个跪在地上的女孩，她们一个穿粉色背心一个穿黄色夹克，都在跟我撒娇，我一只手托着粉衣女孩的脸，另一只手抚着黄衣女孩的头发；旁边还有一个穿白色衬衫的女孩站着，双手抱胸吃醋地看着我们。开阔操场，白天明亮自然光，写实照片，人物肢体正常，细节丰富"
+   ]
+  },
+  {
+   "id": 6,
+   "type": "CLIPTextEncode",
+   "pos": [
+    470,
+    480
+   ],
+   "size": [
+    400,
+    240
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "title": "负向提示词",
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 4,
+     "label": "CLIP"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "nsfw, worst quality, bad anatomy, watermark, jpeg artifact, extra person, extra face, additional head, duplicated face, deformed hands, missing fingers"
+   ]
+  },
+  {
+   "id": 7,
+   "type": "EmptyFlux2LatentImage",
+   "pos": [
+    60,
+    494
+   ],
+   "size": [
+    340,
+    112
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "title": "画布尺寸",
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "EmptyFlux2LatentImage"
+   },
+   "widgets_values": [
+    1440,
+    1024,
+    1
+   ]
+  },
+  {
+   "id": 8,
+   "type": "KSampler",
+   "pos": [
+    940,
+    60
+   ],
+   "size": [
+    320,
+    430
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "title": "② 第一趟：不带人物滤镜，只要构图",
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 5,
+     "label": "MODEL"
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 6,
+     "label": "CONDITIONING"
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 7,
+     "label": "CONDITIONING"
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 8,
+     "label": "LATENT"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    3344,
+    "fixed",
+    8,
+    1.0,
+    "euler",
+    "normal",
+    1.0
+   ]
+  },
+  {
+   "id": 9,
+   "type": "VAEDecode",
+   "pos": [
+    1330,
+    60
+   ],
+   "size": [
+    340,
+    110
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "title": "草稿解码",
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 9,
+     "label": "LATENT"
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 10,
+     "label": "VAE"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 10,
+   "type": "SaveImage",
+   "pos": [
+    1740,
+    60
+   ],
+   "size": [
+    320,
+    330
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "title": "存草稿（构图基准）",
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 11,
+     "label": "IMAGE"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "v12_草稿"
+   ]
+  },
+  {
+   "id": 15,
+   "type": "MOSSIdFaceRegionMap",
+   "pos": [
+    1740,
+    424
+   ],
+   "size": [
+    420,
+    470
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "title": "③ 人脸定位地盘（自动切每人一块）",
+   "inputs": [
+    {
+     "name": "草稿图",
+     "type": "IMAGE",
+     "link": 12,
+     "label": "IMAGE"
+    },
+    {
+     "name": "遮罩",
+     "type": "MASK",
+     "link": null
+    },
+    {
+     "name": "参考脸",
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "地盘数据",
+     "type": "REGION_MAP",
+     "links": []
+    },
+    {
+     "name": "指派说明",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "地盘可视化",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MOSSIdFaceRegionMap"
+   },
+   "widgets_values": [
+    1440,
+    1024,
+    0,
+    24,
+    "",
+    "按位置排（左到右）",
+    "自动逐人切（本节点内置调用）",
+    0,
+    "内置可用 ｜ SAM2/sam2.1_hiera_base_plus.pt ｜ 309 MB",
+    ""
+   ]
+  },
+  {
+   "id": 16,
+   "type": "PreviewImage",
+   "pos": [
+    2230,
+    60
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "title": "看：地盘与序号框",
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 13,
+     "label": "地盘可视化"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 17,
+   "type": "ShowText|pysssss",
+   "pos": [
+    2230,
+    394
+   ],
+   "size": [
+    420,
+    230
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "title": "看：地盘说明",
+   "inputs": [
+    {
+     "name": "text",
+     "type": "STRING",
+     "link": 14,
+     "label": "指派说明"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ShowText|pysssss"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 18,
+   "type": "MOSSIdGatedLora",
+   "pos": [
+    2230,
+    658
+   ],
+   "size": [
+    420,
+    260
+   ],
+   "flags": {},
+   "order": 18,
+   "mode": 0,
+   "title": "④ 人物滤镜·分区（编号 1）",
+   "inputs": [
+    {
+     "name": "模型",
+     "type": "MODEL",
+     "link": 15,
+     "label": "MODEL"
+    },
+    {
+     "name": "地盘数据",
+     "type": "REGION_MAP",
+     "link": 16,
+     "label": "地盘数据"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "模型",
+     "type": "MODEL",
+     "links": []
+    },
+    {
+     "name": "说明",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MOSSIdGatedLora"
+   },
+   "widgets_values": [
+    "",
+    1,
+    1.3,
+    "否"
+   ]
+  },
+  {
+   "id": 19,
+   "type": "MOSSIdGatedLora",
+   "pos": [
+    2720,
+    60
+   ],
+   "size": [
+    420,
+    260
+   ],
+   "flags": {},
+   "order": 19,
+   "mode": 0,
+   "title": "④ 人物滤镜·分区（编号 2）",
+   "inputs": [
+    {
+     "name": "模型",
+     "type": "MODEL",
+     "link": 17,
+     "label": "模型"
+    },
+    {
+     "name": "地盘数据",
+     "type": "REGION_MAP",
+     "link": 18,
+     "label": "地盘数据"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "模型",
+     "type": "MODEL",
+     "links": []
+    },
+    {
+     "name": "说明",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "MOSSIdGatedLora"
+   },
+   "widgets_values": [
+    "",
+    2,
+    1.3,
+    "否"
+   ]
+  },
+  {
+   "id": 20,
+   "type": "ShowText|pysssss",
+   "pos": [
+    2720,
+    354
+   ],
+   "size": [
+    420,
+    230
+   ],
+   "flags": {},
+   "order": 20,
+   "mode": 0,
+   "title": "看：滤镜挂没挂上",
+   "inputs": [
+    {
+     "name": "text",
+     "type": "STRING",
+     "link": 19,
+     "label": "说明"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ShowText|pysssss"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 21,
+   "type": "VAEEncode",
+   "pos": [
+    1740,
+    928
+   ],
+   "size": [
+    340,
+    110
+   ],
+   "flags": {},
+   "order": 21,
+   "mode": 0,
+   "title": "把草稿装回画布",
+   "inputs": [
+    {
+     "name": "pixels",
+     "type": "IMAGE",
+     "link": 20,
+     "label": "IMAGE"
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 21,
+     "label": "VAE"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEEncode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 22,
+   "type": "KSampler",
+   "pos": [
+    3210,
+    60
+   ],
+   "size": [
+    320,
+    430
+   ],
+   "flags": {},
+   "order": 22,
+   "mode": 0,
+   "title": "⑤ 第二趟：同种子重绘，只换指定的人",
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 22,
+     "label": "模型"
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 23,
+     "label": "CONDITIONING"
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 24,
+     "label": "CONDITIONING"
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 25,
+     "label": "LATENT"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    3344,
+    "fixed",
+    8,
+    1.0,
+    "euler",
+    "normal",
+    0.85
+   ]
+  },
+  {
+   "id": 23,
+   "type": "VAEDecode",
+   "pos": [
+    3600,
+    60
+   ],
+   "size": [
+    340,
+    110
+   ],
+   "flags": {},
+   "order": 23,
+   "mode": 0,
+   "title": "成品解码",
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 26,
+     "label": "LATENT"
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 27,
+     "label": "VAE"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 24,
+   "type": "SaveImage",
+   "pos": [
+    4010,
+    60
+   ],
+   "size": [
+    320,
+    330
+   ],
+   "flags": {},
+   "order": 24,
+   "mode": 0,
+   "title": "成品",
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 28,
+     "label": "IMAGE"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "v12_成品"
+   ]
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   4,
+   0,
+   "MODEL"
+  ],
+  [
+   2,
+   2,
+   0,
+   4,
+   1,
+   "CLIP"
+  ],
+  [
+   3,
+   2,
+   0,
+   5,
+   0,
+   "CLIP"
+  ],
+  [
+   4,
+   2,
+   0,
+   6,
+   0,
+   "CLIP"
+  ],
+  [
+   5,
+   4,
+   0,
+   8,
+   0,
+   "MODEL"
+  ],
+  [
+   6,
+   5,
+   0,
+   8,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   7,
+   6,
+   0,
+   8,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   8,
+   7,
+   0,
+   8,
+   3,
+   "LATENT"
+  ],
+  [
+   9,
+   8,
+   0,
+   9,
+   0,
+   "LATENT"
+  ],
+  [
+   10,
+   3,
+   0,
+   9,
+   1,
+   "VAE"
+  ],
+  [
+   11,
+   9,
+   0,
+   10,
+   0,
+   "IMAGE"
+  ],
+  [
+   12,
+   9,
+   0,
+   15,
+   0,
+   "IMAGE"
+  ],
+  [
+   13,
+   15,
+   2,
+   16,
+   0,
+   "IMAGE"
+  ],
+  [
+   14,
+   15,
+   1,
+   17,
+   0,
+   "STRING"
+  ],
+  [
+   15,
+   4,
+   0,
+   18,
+   0,
+   "MODEL"
+  ],
+  [
+   16,
+   15,
+   0,
+   18,
+   1,
+   "REGION_MAP"
+  ],
+  [
+   17,
+   18,
+   0,
+   19,
+   0,
+   "MODEL"
+  ],
+  [
+   18,
+   15,
+   0,
+   19,
+   1,
+   "REGION_MAP"
+  ],
+  [
+   19,
+   18,
+   1,
+   20,
+   0,
+   "STRING"
+  ],
+  [
+   20,
+   9,
+   0,
+   21,
+   0,
+   "IMAGE"
+  ],
+  [
+   21,
+   3,
+   0,
+   21,
+   1,
+   "VAE"
+  ],
+  [
+   22,
+   19,
+   0,
+   22,
+   0,
+   "MODEL"
+  ],
+  [
+   23,
+   5,
+   0,
+   22,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   24,
+   6,
+   0,
+   22,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   25,
+   21,
+   0,
+   22,
+   3,
+   "LATENT"
+  ],
+  [
+   26,
+   22,
+   0,
+   23,
+   0,
+   "LATENT"
+  ],
+  [
+   27,
+   3,
+   0,
+   23,
+   1,
+   "VAE"
+  ],
+  [
+   28,
+   23,
+   0,
+   24,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "模型与你的原话",
+   "bounding": [
+    34,
+    8,
+    862,
+    736
+   ],
+   "color": "#2f5d78",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "第一趟：先出草稿定构图（不带人物滤镜）",
+   "bounding": [
+    914,
+    8,
+    1172,
+    506
+   ],
+   "color": "#5a4a86",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "地盘：检脸 + 逐人遮罩 + 编号",
+   "bounding": [
+    1714,
+    8,
+    962,
+    910
+   ],
+   "color": "#1f6b4d",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 4,
+   "title": "每人挂自己的滤镜",
+   "bounding": [
+    2204,
+    8,
+    962,
+    934
+   ],
+   "color": "#8a5a1f",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 5,
+   "title": "第二趟：同种子重绘，只换指定的人",
+   "bounding": [
+    1714,
+    8,
+    2642,
+    1054
+   ],
+   "color": "#7c3b52",
+   "font_size": 24,
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "说明": "A 用法·两趟锁身份：第一趟不带人物滤镜出草稿（构图交给原生模型），「人脸定位地盘」按草稿里真实脸位＋SAM 逐人遮罩切地盘，第二趟同种子重绘，每个人的滤镜只在自己那块生效。适合多人交错、姿态复杂、要最干净的身份。要用的：① 号原话、两个滤镜节点的『滤镜文件』和『人物编号』；『角色名字』留空＝检到几张脸就几个人。",
+  "生成时间": "2026-11-13 02:26:50"
+ },
+ "version": 0.4
+}

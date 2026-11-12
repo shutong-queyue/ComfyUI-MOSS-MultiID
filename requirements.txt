@@ -1,0 +1,5 @@
+insightface
+onnxruntime
+opencv-python
+# 下面这行是"每人一块（SAM2 自动切）"才需要的官方包；需要时去掉行首的 # 再对本插件点 Reinstall
+# git+https://github.com/facebookresearch/sam2.git
