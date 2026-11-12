@@ -144,14 +144,32 @@ MOSS-Image 是**单流 DiT**：图像和文字被拼成同一条序列一起做�
 
 ## 安装
 
-1. **拿到仓库地址。** 页面上点 Code → Clone，复制形如 `https://github.com/<你的用户名>/<仓库名>.git` 的地址。
-2. **在 ComfyUI-Manager 里安装。** 打开 ComfyUI → Manager 面板 → `Install custom nodes` → 切到 **Install via URL / Git URL** → 粘贴上一步的地址 → Install。
-3. **重启 ComfyUI。** 装完必须重启进程（不是刷新页面），依赖和权重会在这一步前后自动补齐。
+仓库地址：**`https://github.com/shutong-queyue/ComfyUI-MOSS-MultiID`**
 
-另外两条路：
+### 方式一：git clone
 
-- 已经收录进 Manager 节点列表后，直接搜本插件名安装即可。
-- 手动安装：`git clone` 到 `ComfyUI/custom_nodes/`，重启后在 Manager 里对本插件点一次 **Reinstall**；或者下载 zip 解压后**双击文件夹里的 `install.bat`**，再重启。
+```shell
+cd ComfyUI/custom_nodes
+git clone https://github.com/shutong-queyue/ComfyUI-MOSS-MultiID.git
+```
+
+然后**重启 ComfyUI**（重启进程，不是刷新页面）。重启后依赖还没装——在 Manager 面板里对本插件点一次 **Reinstall**，或者双击插件文件夹里的 `install.bat`，再重启一次。
+
+### 方式二：ComfyUI-Manager 里粘贴地址（最省事）
+
+ComfyUI → **Manager** 面板 → `Install custom nodes` → 切到 **Install via URL / Git URL** → 粘贴上面那个仓库地址 → **Install** → 重启 ComfyUI。
+
+这条路会自动把 Python 包和权重一起补齐，不需要你再点别的。
+
+### 方式三：下载 zip
+
+仓库页面上点 **Code → Download ZIP** → 解压到 `ComfyUI/custom_nodes/`，
+确认解压出来的文件夹名是 `ComfyUI-MOSS-MultiID`（zip 解压常会多套一层，
+里面必须有 `__init__.py`）→ **双击该文件夹里的 `install.bat`** → 重启 ComfyUI。
+
+---
+
+> 本插件收录进 Manager 的节点列表之后，直接在列表里搜 `MOSS-MultiID` 安装也可以，效果同方式二。
 
 第一次点「人脸定位地盘」会多等一两分钟——那是 insightface 库在自己下载人脸模型，属正常。
 

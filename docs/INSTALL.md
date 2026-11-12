@@ -7,13 +7,25 @@
 
 ## 三种装法
 
-| 方式 | 步骤 |
-| --- | --- |
-| ComfyUI-Manager（推荐） | Manager → Install Custom Nodes 搜 `MOSS-MultiID` → 装完重启 ComfyUI |
-| git | `cd ComfyUI/custom_nodes && git clone <仓库地址> ComfyUI-MOSS-MultiID`，重启后在 Manager 里对本插件点一次 **Reinstall** |
-| 下载 zip | 解压到 `ComfyUI/custom_nodes/ComfyUI-MOSS-MultiID`，然后**双击文件夹里的 `install.bat`**，重启 ComfyUI |
+仓库地址：**`https://github.com/shutong-queyue/ComfyUI-MOSS-MultiID`**
 
-Manager 安装时会自动做两件事：先按 `requirements.txt` 逐行装 Python 包，再自动运行 `install.py` 补权重。全程不需要你敲命令。
+| 方式 | 步骤 | 谁帮你装依赖 |
+| --- | --- | --- |
+| **一、git clone** | `cd ComfyUI/custom_nodes` → `git clone <上面地址>` → 重启 ComfyUI → 在 Manager 里对本插件点一次 **Reinstall**（或双击 `install.bat`）→ 再重启 | 你点的那一下 Reinstall |
+| **二、Manager 粘贴地址**（最省事） | Manager → `Install custom nodes` → **Install via URL / Git URL** → 粘贴上面地址 → Install → 重启 ComfyUI | Manager 全自动 |
+| **三、下载 zip** | Code → Download ZIP → 解压到 `ComfyUI/custom_nodes/`，确认文件夹里有 `__init__.py` → **双击 `install.bat`** → 重启 ComfyUI | `install.bat` |
+
+方式二之所以最省事：Manager 会自动做两件事——先按 `requirements.txt` 逐行装 Python 包，
+再自动运行 `install.py` 补权重。全程不需要你敲命令。
+
+> 本插件被收录进 Manager 的节点列表之后，也可以直接在列表里搜 `MOSS-MultiID` 安装，效果同方式二。
+> 收录需要往 [Comfy-Org/comfyui-register](https://github.com/Comfy-Org/comfyui-register) 提一个 PR，
+> 在那之前只能用上面三种方式。
+
+**zip 解压最容易踩的坑**：GitHub 的 zip 解压出来可能多套一层（比如
+`ComfyUI-MOSS-MultiID-main/`）。把里面那层改名为 `ComfyUI-MOSS-MultiID`，
+或者直接把内层内容放到该名字下——判定标准很简单：
+`ComfyUI/custom_nodes/ComfyUI-MOSS-MultiID/__init__.py` 这个文件必须存在。
 
 ## 谁负责下载什么
 
