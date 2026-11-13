@@ -170,6 +170,10 @@ ComfyUI → **Manager** 面板 → `Install custom nodes` → 切到 **Install v
 ---
 
 > 本插件收录进 Manager 的节点列表之后，直接在列表里搜 `MOSS-MultiID` 安装也可以，效果同方式二。
+>
+> ⚠️ **一键安装（Registry）的用户请补一步**：一键安装只装 `insightface` / `onnxruntime` / `opencv-python` 这三个 Python 依赖，
+> **不保证会执行 `install.py`**，所以"自动逐人切"需要的 `sam2` 库可能缺失——插件照常能用，只是那一档会自动退回"不遮罩"并给出提示。
+> 想用自动切：装完在 Manager 里对本插件点一次 **Reinstall**，或双击插件文件夹里的 `install.bat`（已装过的会自动跳过），然后重启 ComfyUI。
 
 第一次点「人脸定位地盘」会多等一两分钟——那是 insightface 库在自己下载人脸模型，属正常。
 
