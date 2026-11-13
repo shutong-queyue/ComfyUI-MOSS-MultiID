@@ -27,6 +27,12 @@
 或者直接把内层内容放到该名字下——判定标准很简单：
 `ComfyUI/custom_nodes/ComfyUI-MOSS-MultiID/__init__.py` 这个文件必须存在。
 
+> ⚠️ **通过 Manager 一键安装（Registry）的用户请补一步**：一键安装只装
+> `insightface` / `onnxruntime` / `opencv-python`，**不保证会执行 `install.py`**，
+> 所以"自动逐人切"需要的 `sam2` 库可能缺失——插件照常能用，只是那一档会自动退回
+> "不遮罩"并给出提示。想用自动切：装完对本插件点一次 **Reinstall** 或双击 `install.bat`，
+> 然后重启 ComfyUI。
+
 ## 谁负责下载什么
 
 | 东西 | 谁下 | 大小 | 落在哪 |
