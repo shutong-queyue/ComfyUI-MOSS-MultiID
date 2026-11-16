@@ -310,10 +310,29 @@ class MOSSIdFaceRegionMap:
     CATEGORY = "MOSS多身份"
     DESCRIPTION = "按草稿图里真实人脸位置分地盘；可接遮罩只算人身上的像素；脸被挡住时自动退回备用方框"
 
+    #: 已经废弃的输入名 → 现在的等价写法。留着是为了让老存档照常跑，不是让用户改文件。
+    #: 少了这一段，带旧口的存档会直接 TypeError（真实事故，别删）。
+    LEGACY = {
+        "人像遮罩": "遮罩（1 张整幅剪影）",
+        "人物遮罩": "遮罩（多张每人一块）",
+        "环境不齐时": "已内建，无需设置",
+    }
+
     def build(self, 草稿图, 画布宽, 画布高, 归属半径, 边界抹软像素, 角色名字, 谁是谁,
                遮罩来源, 遮罩放大像素, SAM模型,
-               遮罩=None, 参考脸=None, 备用方框=None):
+               遮罩=None, 参考脸=None, 备用方框=None, **旧字段):
         pm = _person_masks_mod()
+        # 老存档里可能还带着已废弃的输入。这里不报错、不忽略到底：
+        # 能等价迁移的迁到『遮罩』，剩下的记一笔在说明里提醒换新版。
+        legacy_notes = []
+        for k, v in list(旧字段.items()):
+            if k in ("人像遮罩", "人物遮罩") and v is not None and 遮罩 is None:
+                遮罩 = v
+                legacy_notes.append("旧输入『%s』已并入『遮罩』，功能照常" % k)
+            else:
+                legacy_notes.append("存档里的『%s』这个输入已经不存在（%s），这一趟已忽略"
+                                    % (k, self.LEGACY.get(k, "见说明")))
+        旧字段.clear()
         auto_cut = not str(遮罩来源).startswith(("不接", "外部"))
         env_lines = self._env_silent(auto_cut)
         sam_row = pm.sam_row(SAM模型)
@@ -582,7 +601,7 @@ class MOSSIdFaceRegionMap:
                   "owner": torch.from_numpy(np.ascontiguousarray(owner_idx)),
                   "feather": int(边界抹软像素), "mode": "人脸就近"}
 
-        lines = list(env_lines) + [
+        lines = list(env_lines) + ["【存档】" + n for n in legacy_notes] + [
                  f"草稿图尺寸 {draft.shape[2]}×{draft.shape[1]}，检测到 {len(dfaces)} 张脸，"
                  f"按角色名字算 {n_people} 个人"
                  + (f"，参考脸 {min(n_people, refs.shape[0]) if refs is not None else 0} 张" if refs is not None
