@@ -1,3 +1,6 @@
 # Keep the registry archive lean.
-# The README screenshots are only needed for GitHub rendering; Manager does not need them.
 docs/img/
+
+# 本地开发与测试目录，不发布
+dev/
+_本地测试/

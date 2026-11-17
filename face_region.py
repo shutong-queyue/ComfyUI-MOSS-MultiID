@@ -153,6 +153,20 @@ def _put_text(img, text, x, y, rgb, s=10, bg=None):
                 img[max(0, yy):min(h, yy + s), max(0, xx):min(w, xx + s)] = rgb
 
 
+def _ellipse(H, W, cx, cy, rx, ry):
+    """画一个软边的椭圆遮罩（0~1），用于把"整个头"圈出来。
+    用解析式算而不是 cv2.fillEllipse：椭圆外沿要能连续衰减，硬边会在
+    重绘区和未重绘区之间留一圈可见台阶。"""
+    import numpy as np
+    gy, gx = np.mgrid[0:H, 0:W]
+    d = ((gx - cx) / max(1.0, rx)) ** 2 + ((gy - cy) / max(1.0, ry)) ** 2
+    m = np.zeros((H, W), dtype=np.float32)
+    m[d <= 1.0] = 1.0
+    edge = (d > 1.0) & (d < 1.45)          # 外沿 45% 的环形带做线性衰减
+    m[edge] = np.clip((1.45 - d[edge]) / 0.45, 0.0, 1.0)
+    return m
+
+
 def _faces(bgr):
     app = _app()
     out = []
@@ -275,9 +289,19 @@ class MOSSIdFaceRegionMap:
                                        "· 自动逐人切＝本节点自己调用下面选的 SAM 模型，"
                                        "把每个人各切一块，不需要再加别的节点。"}),
                 "遮罩放大像素": ("INT", {"default": 0, "min": 0, "max": 192, "step": 4,
-                                      "tooltip": "把每块遮罩向外胀多少像素，用来补回被切掉的发梢、衣角、肩膀。\n"
-                                                 "0＝最贴身体，换脸最稳；24~48＝覆盖更全，换脸强度略降；"
-                                                 "96 以上容易和相邻的人连成一片。"}),
+                                      "tooltip": "把每块遮罩向外胀一点，用来补回被切掉的发梢、衣角、肩膀。\n"
+                                                 "0＝不扩，最贴身体、换脸最稳；往大调覆盖更全，"
+                                                 "但换脸强度会被摊薄，太大还会和相邻的人连成一片。\n"
+                                                 "从 0 开始，只有确实缺边角时再一点点加。"}),
+                "小脸精修上限": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 5,
+                                      "tooltip": "脸有多小就单独再修一次。填 0＝关，不影响任何东西。\n"
+                                                 "填一个像素宽度：宽度小于它的脸，"
+                                                 "会从『小脸遮罩』这个口出来，交给后面那一趟高幅度重绘专门处理。\n"
+                                                 "为什么要单独一趟：小脸占的格子太少，整幅按常规幅度重绘时"
+                                                 "推不动它；直接把整幅幅度拉高又会把构图挪走。"
+                                                 "这一档只重画遮罩里的部分，遮罩外保持原样。\n"
+                                                 "接出去那一趟的重绘幅度别拉满：拉满等于把原来那张脸丢掉重画，"
+                                                 "反而会更不像；滤镜浓度也不要在这趟往上加。"}),
                 "SAM模型": (pm.sam_labels(), {"default": pm.sam_default_label(),
                                            "tooltip": "『自动逐人切』用哪个 SAM 权重，只在上一项选"
                                                       "『自动逐人切』时生效。\n"
@@ -301,11 +325,14 @@ class MOSSIdFaceRegionMap:
                 "备用方框": ("STRING", {
                     "tooltip": "某张脸被挡住、检不到时的兜底位置（一般接构图节点输出的方框）。"
                               "没有它时，检不到的人会按人数均分并给出提示"}),
+                "来源开关": ("STRING", {"forceInput": True,
+                    "tooltip": "接『遮罩来源开关』的输出。接上以后以它为准，"
+                               "『遮罩来源』那个下拉就只当注释；不接就照旧看下拉。"}),
             },
         }
 
-    RETURN_TYPES = ("REGION_MAP", "STRING", "IMAGE")
-    RETURN_NAMES = ("地盘数据", "指派说明", "地盘可视化")
+    RETURN_TYPES = ("REGION_MAP", "STRING", "IMAGE", "MASK")
+    RETURN_NAMES = ("地盘数据", "指派说明", "地盘可视化", "小脸遮罩")
     FUNCTION = "build"
     CATEGORY = "MOSS多身份"
     DESCRIPTION = "按草稿图里真实人脸位置分地盘；可接遮罩只算人身上的像素；脸被挡住时自动退回备用方框"
@@ -319,8 +346,11 @@ class MOSSIdFaceRegionMap:
     }
 
     def build(self, 草稿图, 画布宽, 画布高, 归属半径, 边界抹软像素, 角色名字, 谁是谁,
-               遮罩来源, 遮罩放大像素, SAM模型,
-               遮罩=None, 参考脸=None, 备用方框=None, **旧字段):
+               遮罩来源, 遮罩放大像素, SAM模型, 小脸精修上限=0,
+               遮罩=None, 参考脸=None, 备用方框=None, 来源开关=None, **旧字段):
+        if 来源开关:
+            # 接了这个口就以它为准：工作流里用一个开关节点就能换来源，不用每次进节点改下拉
+            遮罩来源 = str(来源开关)
         pm = _person_masks_mod()
         # 老存档里可能还带着已废弃的输入。这里不报错、不忽略到底：
         # 能等价迁移的迁到『遮罩』，剩下的记一笔在说明里提醒换新版。
@@ -393,6 +423,7 @@ class MOSSIdFaceRegionMap:
                         type(exc).__name__, "，改用外部遮罩" if mask_raw is not None else "，这趟不遮罩")
         expand = int(遮罩放大像素)
         mask_tensor, per_person = None, False
+        _external_masks = (遮罩 is not None and not auto_cut)
         if mask_raw is not None:
             mm = mask_raw.detach().cpu().float().numpy()
             if mm.ndim == 2:
@@ -489,6 +520,34 @@ class MOSSIdFaceRegionMap:
         #       ② 没有任何脸的遮罩（主视角观察者的手、背影）一律不发滤镜；
         #       ③ 两个人抢同一块遮罩时，这块按离谁的脸近切开。
         body_note = ""
+        pair_note = ""
+
+        # 接了"整幅人物剪影"时：先用剪影+脸做分区（对弯腰/遮挡稳），成功就用结果，
+        # 分不出来再走原来的"每人一块"或"按距离"。
+        if mask_tensor is not None and not per_person:
+            try:
+                _rgb = np.clip(草稿图[0].float().cpu().numpy() * 255.0, 0, 255).astype(np.uint8)
+                _sil = mask_tensor.detach().cpu().float().numpy()
+                _split = pm.split_by_silhouette(_rgb, chosen, _sil if _sil.ndim == 2 else _sil[0])
+                if _split:
+                    mask_tensor = torch.from_numpy(np.ascontiguousarray(np.stack(_split)))
+                    per_person = True
+                    mask_src = (mask_src or "") + "｜已按剪影+脸分区（%d 块）" % len(_split)
+            except Exception as _e:
+                pass
+
+        # 先把"每人一块"整理干净：含多张脸的块切开、没人认领的并给最近的人。
+        # YOLO / 别的插件给回来的块常常不是一人一份，不整理就会出现
+        # "两个人抢同一块"（配对行里会看到 1号↔第1块、2号↔第1块）。
+        if mask_tensor is not None and per_person:
+            try:
+                _rgb0 = np.clip(草稿图[0].float().cpu().numpy() * 255.0, 0, 255).astype(np.uint8)
+                _cm = pm.combine_per_person(_rgb0, list(mask_tensor.detach().cpu().float().numpy()), chosen)
+                if _cm:
+                    mask_tensor = torch.from_numpy(np.ascontiguousarray(np.stack(_cm)))
+                    mask_src = (mask_src or "") + "｜已整理为每人一块（%d 块）" % len(_cm)
+            except Exception:
+                pass
 
         if mask_tensor is not None and per_person:
             try:
@@ -514,8 +573,28 @@ class MOSSIdFaceRegionMap:
                     gy = int(min(gh - 1, max(0, f["cy"] // DS)))
                     gx = int(min(gw - 1, max(0, f["cx"] // DS)))
                     gi = gy * gw + gx
-                    j = int(grid[:, gi].argmax())
-                    val = float(grid[j, gi])
+                    # ① 先按顺序一对一：遮罩和人是同一次排序、同样人数切出来的，
+                    #    第 i 个人就应该是第 i 块。这一步能挡住"相邻遮罩互相盖到
+                    #    对方脸心"造成的整体错位（曾经 2 号拿 3 号、3 号拿 4 号）。
+                    # 自家 SAM 切出来的：顺序就是人的顺序，先按一对一；
+                    # 外部接进来的（YOLO/别的插件给的每人一块）：顺序不可控，
+                    # 只能用这张脸落在哪块里来判断，否则会整体错位。
+                    if _external_masks:
+                        j, val = -1, 0.0
+                    else:
+                        j = i if i < grid.shape[0] else -1
+                        if j >= 0 and j not in used:
+                            val = float(grid[j, gi])
+                        else:
+                            j, val = -1, 0.0
+                    if val <= 0.2:
+                        # ② 顺序对不上（那块没盖住自己的脸心，或已被占）→ 退回就近挑
+                        j2 = int(grid[:, gi].argmax())
+                        v2 = float(grid[j2, gi])
+                        if v2 > 0.2:
+                            j, val = j2, v2
+                        else:
+                            j, val = -1, v2
                     if val <= 0.2:
                         # 脸心正好落在遮罩缝里：改挑"质心离这张脸最近"的那块（限 2.5 倍脸宽内）
                         lim = 2.5 * max(24.0, float(f["w"]))
@@ -551,6 +630,9 @@ class MOSSIdFaceRegionMap:
                 # 保证块内的格子基本全额拿到自己的滤镜。
                 scores = (np.clip(own, 0.0, 1.0) - 0.5) * 240.0
                 darea = int((np.stack([grid[j] for j in dropped]) > 0.5).sum()) if dropped else 0
+                pair_note = ("配对方式：按顺序一对一（%s）" %
+                             "、".join("%d号↔第%d块" % (i + 1, j + 1)
+                                      for i, j in enumerate(pick) if j >= 0))
                 body_note = ("每人一块遮罩已生效：%d 块遮罩，%d 块有主人，%d 块没有脸（%d 格）不发任何滤镜"
                              % (grid.shape[0], len(used), len(dropped), darea))
             except Exception as exc:
@@ -599,7 +681,10 @@ class MOSSIdFaceRegionMap:
                   "canvas": (int(画布宽), int(画布高)), "boxes": boxes,
                   "weight": torch.from_numpy(np.ascontiguousarray(weight)),
                   "owner": torch.from_numpy(np.ascontiguousarray(owner_idx)),
-                  "feather": int(边界抹软像素), "mode": "人脸就近"}
+                  "feather": int(边界抹软像素), "mode": "人脸就近",
+                  # 小脸判定：填 0＝关。小脸裁剪节点填 0 时会沿用这里的值，
+                  # 两个节点填一处就够，别让使用者在两处对不上。
+                  "小脸上限": int(小脸精修上限)}
 
         lines = list(env_lines) + ["【存档】" + n for n in legacy_notes] + [
                  f"草稿图尺寸 {draft.shape[2]}×{draft.shape[1]}，检测到 {len(dfaces)} 张脸，"
@@ -624,18 +709,19 @@ class MOSSIdFaceRegionMap:
         for i, f in enumerate(chosen):
             nm = boxes[i]["name"]
             lines.append(f"人物{i + 1}（{nm}）中心 x={f['cx']:.0f} y={f['cy']:.0f} — {f['来源']}")
-        if len(chosen) == 2:
+        if len(chosen) == 2 and not per_person:
             mid = (chosen[0]["cx"] + chosen[1]["cx"]) / 2
             lines.append("")
             lines.append(f"分界线自动落在 x≈{mid:.0f}（两个人中心正中间）")
             for i, f in enumerate(chosen):
                 if abs(f["cx"] - mid) < f["w"] * 0.5:
                     lines.append(f"  ⚠ {boxes[i]['name']} 会跨过这条线，靠近的那半边拿不满自己的滤镜")
-        elif len(chosen) > 2:
+        elif len(chosen) > 2 and not per_person:
             lines.append("")
             lines.append("三个人以上：交界按「离谁的脸近归谁」自动分，不是等距切列")
         public = int((scores.max(axis=0) <= 0).sum())
-        lines.append(f"不属于任何人的格子：{public} 格（归属半径 {R:.0f}）")
+        if not per_person:
+            lines.append(f"不属于任何人的格子：{public} 格（归属半径 {R:.0f}）")
         if int(画布宽) % DS or int(画布高) % DS:
             lines.append("⚠ 画布宽/高不是 16 的倍数（%s×%s）：模型的小格子只能整除，"
                          "最后 %d 行 / %d 列拿不到任何滤镜。建议改成 %d×%d。" % (
@@ -643,6 +729,8 @@ class MOSSIdFaceRegionMap:
                              int(画布宽) // DS * DS, int(画布高) // DS * DS))
         if body_note:
             lines.append(body_note)
+        if pair_note:
+            lines.append(pair_note)
         if mask_note:
             lines.append(mask_note)
         if ref_warn:
@@ -694,7 +782,77 @@ class MOSSIdFaceRegionMap:
             _put_text(cv, str(i + 1), x0 - 2 * s, ly, bright, s=s, bg=dark)
         vis = torch.from_numpy(np.ascontiguousarray(out)).float()
 
-        return (region, "\n".join(lines), vis)
+        # ── 小脸遮罩：给后面那一趟"只改这一块"的高幅度重绘用 ────────────────
+        # 为什么要单独一趟：小脸占的小格子太少，整幅按常规幅度重绘推不动它；
+        # 把整幅幅度拉高又会把构图挪走。配合 SetLatentNoiseMask，
+        # 采样器每一步都把遮罩外的潜变量还原成原图，所以遮罩外保持原样
+        # （1440×1024 实测：遮罩值＝0 的区域最大灰阶差 3/255、差≥4 的像素 0 个，肉眼看不出）。
+        CW, CH = int(画布宽), int(画布高)
+        small_mask = torch.zeros((CH, CW), dtype=torch.float32)
+        small_notes = []
+        if int(小脸精修上限) > 0:
+            import cv2
+            sx, sy = CW / max(1.0, float(W)), CH / max(1.0, float(H))   # 草稿尺寸 → 画布尺寸
+            lim = float(小脸精修上限)
+            acc = np.zeros((CH, CW), np.float32)
+            picks_idx = []
+
+            def _head(i):
+                """把第 i 个人整个头圈成一个软边椭圆（脸框之外还要带头发）"""
+                f = chosen[i]
+                cx, cy = f["cx"] * sx, f["cy"] * sy
+                fw, fh = f["w"] * sx, f["h"] * sy
+                top, bot = cy - fh * 1.15, cy + fh * 0.55
+                return _ellipse(CH, CW, cx, (top + bot) / 2.0, max(6.0, fw * 0.85),
+                                (bot - top) / 2.0)
+
+            for i, f in enumerate(chosen):
+                nm = names[i] if i < len(names) else f"{i + 1}号"
+                if f["conf"] <= 0.0:
+                    small_notes.append("%s：%s，不做小脸精修" % (nm, f["来源"].split("，")[0].replace("⚠ ", "")))
+                    continue
+                if float(f["w"]) * sx > lim:
+                    continue
+                picks_idx.append(i)
+                small_notes.append("%s：脸宽 %.0f 像素（上限 %.0f）→ 进小脸精修"
+                                   % (nm, f["w"] * sx, lim))
+
+            if picks_idx:
+                # 几个人的椭圆会互相压到对方脸上。做法：先把别人的**脸框**从自己这块里
+                # 整块扣掉（外扩一点），扣完剩下的才是"这句话本身"——
+                # 这样既不会改到别人的脸，视觉上几个人也是分开的两团，而不是连成一片。
+                def _face_rect(j, grow=0.10):
+                    g = chosen[j]
+                    cx, cy = g["cx"] * sx, g["cy"] * sy
+                    fw, fh = g["w"] * sx, g["h"] * sy
+                    x0 = int(max(0, cx - fw * (0.5 + grow)))
+                    x1 = int(min(CW, cx + fw * (0.5 + grow)))
+                    y0 = int(max(0, cy - fh * (0.5 + grow)))
+                    y1 = int(min(CH, cy + fh * (0.5 + grow)))
+                    r = np.zeros((CH, CW), np.float32)
+                    if x1 > x0 and y1 > y0:
+                        r[y0:y1, x0:x1] = 1.0
+                    return r
+
+                for i in picks_idx:
+                    mine = _head(i)
+                    for j in range(len(chosen)):
+                        if j != i:
+                            mine = mine * (1.0 - _face_rect(j))
+                    acc = np.maximum(acc, mine)
+            if acc.max() > 0:
+                # 边缘抹软：硬边界会让"改过的脸"和"没改的周围"之间出现一圈台阶
+                soft = int(max(3, round(min(CH, CW) * 0.012)))
+                acc = cv2.GaussianBlur(acc, (2 * soft + 1, 2 * soft + 1), 0)
+                small_mask = torch.from_numpy(np.ascontiguousarray(np.clip(acc, 0.0, 1.0)))
+            n_small = sum(1 for s_ in small_notes if "进小脸精修" in s_)
+            if n_small == 0:
+                small_notes.append("没有脸低于这个上限，小脸遮罩是全黑——后面那一趟等于不做事")
+
+        if small_notes:
+            lines += [""] + ["小脸精修：" + n for n in small_notes]
+
+        return (region, "\n".join(lines), vis, small_mask)
 
 
 NODE_CLASS_MAPPINGS = {"MOSSIdFaceRegionMap": MOSSIdFaceRegionMap}
