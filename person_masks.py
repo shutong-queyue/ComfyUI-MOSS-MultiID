@@ -341,6 +341,8 @@ def _star_mask(pred, H, W, own, others, rounds=4):
                     cur = cur | mk
                     acc += 1
             got += acc
+            if cur.sum() > 0.35 * H * W:
+                break
             if acc == 0:
                 break
     return cur, got
@@ -412,8 +414,39 @@ def predict_person_masks(img_rgb, faces, ckpt, device="cuda"):
                 leg = _legacy_face_down_mask(pred, img_rgb, faces, i, H, W)
                 if leg is not None:
                     mk = np.logical_or(mk, leg) if mk.any() else leg
-            # 只保留"和本人脸连通"的那一块：SAM 偶尔会把别人的鞋、手粘进来
+            _full_body = False
+            # 特写整身：脸占画面很大时（近景/半身），星芒常只切到皮肤。
+            # 用整幅框再问一次 SAM，取“含本人脸、不含别人脸、面积 35%~95%”的最大块，
+            # 这样头发、衣服会一起进来；多人图脸很小，这条不会触发。
             try:
+                if own["w"] >= 0.18 * W or own["h"] >= 0.25 * H:
+                    _mb, _sb, _ = pred.predict(box=np.array([0, 0, W - 1, H - 1], np.float32),
+                                               multimask_output=True)
+                    _best = None
+                    for _cand in _mb:
+                        _q = np.asarray(_cand) > 0
+                        if _q.shape[:2] != (H, W):
+                            continue
+                        _area = float(_q.sum())
+                        if _area < 0.35 * H * W or _area > 0.95 * H * W:
+                            continue
+                        if not _pt_in(_q, own["cx"], own["cy"]):
+                            continue
+                        if any(_pt_in(_q, g["cx"], g["cy"]) for g in others):
+                            continue
+                        if _best is None or _area > float(_best.sum()):
+                            _best = _q
+                    if _best is not None and _best.sum() > mk.sum() * 1.3:
+                        mk = _best
+                        _full_body = True
+            except Exception:
+                pass
+
+            # 只保留"和本人脸连通"的那一块：SAM 偶尔会把别人的鞋、手粘进来
+            # （特写整身那块是整幅框选出来的，头发/衣服本来就可能分成多个连通块，不再裁）
+            try:
+                if _full_body:
+                    raise RuntimeError("skip")
                 import cv2 as _cv
                 _n, lab, _st, _c = _cv.connectedComponentsWithStats(mk.astype(np.uint8), connectivity=8)
                 keep = int(lab[int(min(H - 1, max(0, own["cy"]))), int(min(W - 1, max(0, own["cx"])))])

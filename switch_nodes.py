@@ -18,9 +18,13 @@ class MOSSIdStageSwitch:
         return {
             "required": {
                 "开关": ("BOOLEAN", {"default": True,
-                    "tooltip": "开＝走『开时』那一支（例如：跑这一环节）；关＝走『关时』那一支（例如：跳过，直接用上一环节的图）。"}),
+                    "tooltip": "开＝走『开时』那一支（例如：跑这一环节）；关＝走『关时』那一支（例如：跳过，直接用上一环节的图）。\n"
+                               "『条件』为否时也会走『关时』。"}),
             },
             "optional": {
+                "条件": ("BOOLEAN", {"default": True,
+                    "tooltip": "可选。接“这一环节有没有活干”的判断（地盘的『有脸』、小脸的『有裁片』）。\n"
+                               "条件＝否时直接走『关时』，『开时』整条支路不执行。不接＝只看开关。"}),
                 "关时": ("IMAGE", {"lazy": True,
                     "tooltip": "开关＝关时输出的图（通常是上一环节的成品）。"}),
                 "开时": ("IMAGE", {"lazy": True,
@@ -34,14 +38,14 @@ class MOSSIdStageSwitch:
     CATEGORY = "MOSS多身份"
     DESCRIPTION = "二选一：只执行被选中的那一支，没选中的整条支路都不会跑"
 
-    def check_lazy_status(self, 开关, 关时=None, 开时=None):
-        return ["开时"] if 开关 else ["关时"]
+    def check_lazy_status(self, 开关, 条件=True, 关时=None, 开时=None):
+        return ["开时"] if (开关 and 条件) else ["关时"]
 
-    def run(self, 开关, 关时=None, 开时=None):
-        img = 开时 if 开关 else 关时
+    def run(self, 开关, 条件=True, 关时=None, 开时=None):
+        on = bool(开关) and bool(条件)
+        img = 开时 if on else 关时
         if img is None:
-            raise RuntimeError("环节开关：开关＝%s，但对应那一支没接图。" %
-                               ("开" if 开关 else "关"))
+            raise RuntimeError("环节开关：这一支没接图（开关＝%s，条件＝%s）。" % (开关, 条件))
         return (img,)
 
 

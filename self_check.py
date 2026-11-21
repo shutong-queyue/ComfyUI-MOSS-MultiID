@@ -59,6 +59,29 @@ WEIGHTS = [
      323606802, "没有就切不出「每人一块」，其余功能照常"),
 ]
 
+# 动漫模式用的 YOLO 人脸模型：只有在节点里选「动漫」且本机没有时才下载。
+# 优先走 hf-mirror（国内直连更稳），失败再试 huggingface 原站。
+YOLO_FACE_REL = os.path.join("ultralytics", "bbox", "face_yolov8n.pt")
+YOLO_FACE_URLS = [
+    "https://hf-mirror.com/Bingsu/adetailer/resolve/main/face_yolov8n.pt",
+    "https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8n.pt",
+]
+
+
+def ensure_yolo_face():
+    """确保动漫人脸模型在 models/ultralytics/bbox/ 下。返回 (路径或None, 说明)。"""
+    dst = os.path.join(MODELS, YOLO_FACE_REL)
+    if os.path.exists(dst) and os.path.getsize(dst) > 1024 * 1024:
+        return dst, "已有动漫人脸模型"
+    last = ""
+    for url in YOLO_FACE_URLS:
+        ok, bad = fetch_weights([("动漫人脸模型", dst, url, 0, "动漫模式检脸")])
+        if ok:
+            return dst, ok[0]
+        last = "；".join(bad)
+    return None, last or "下载失败"
+
+
 # 本插件自带的默认权重（缺失时会自动下载，所以清单里永远有它）
 DEFAULT_SAM2 = WEIGHTS[0][1]
 SAM2_URL = WEIGHTS[0][2]

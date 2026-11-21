@@ -104,8 +104,8 @@ class MOSSIdSmallFaceCrop:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "REGION_MAP", "STRING")
-    RETURN_NAMES = ("裁片", "裁片遮罩", "裁片地盘", "说明")
+    RETURN_TYPES = ("IMAGE", "MASK", "REGION_MAP", "STRING", "BOOLEAN")
+    RETURN_NAMES = ("裁片", "裁片遮罩", "裁片地盘", "说明", "有裁片")
     FUNCTION = "run"
     CATEGORY = "MOSS多身份"
     DESCRIPTION = "把每张小脸裁出来放大（一次出多张）；裁片地盘按编号接滤镜，贴回见下一个节点"
@@ -184,24 +184,16 @@ class MOSSIdSmallFaceCrop:
                 notes.append("%s：脸宽 %.0f 像素（上限 %d）→ 进放大重画" % (nm, w, lim))
 
         if not picks:
-            # 一张都没进：也要给下游一张合法输入，否则采样器直接报错。
-            # 这一张的遮罩是全黑的，重画不出来任何变化，贴回也不会改动任何像素。
-            U = _snap16(max(W, H))
-            canvas = np.zeros((U, U, 3), np.uint8)
-            canvas[:min(U, H), :min(U, W)] = a[:min(U, H), :min(U, W)]
-            m = np.zeros((U, U), np.float32)
-            region = {"grid_w": U // DS, "grid_h": U // DS, "n_img": (U // DS) ** 2,
-                      "ds": DS, "canvas": (U, U),
-                      "boxes": [{"owner": 1, "name": "无", "x": 0, "y": 0, "w": U, "h": U}],
-                      "weight": torch.zeros((1, (U // DS) ** 2)),
-                      "owner": torch.zeros((U // DS, U // DS), dtype=torch.int8),
-                      "feather": 0, "mode": "小脸裁剪·空", "按项门控": True,
-                      "项归属": [1], "裁片": {"items": [], "canvas": (W, H), "padded": U}} 
-            return (torch.from_numpy(canvas).float().div_(255.0)[None],
-                    torch.from_numpy(m)[None], region,
-                    "\n".join(["小脸精修：" + n for n in notes]
-                              + ["没有脸进放大重画，这一趟等于不做事。"])
-                    )
+            # 一张都没进：这一段没有继续的意义。直接把三个图像/数据口阻断，
+            # 下游（装回、采样、解码、贴回、保存）整条都不会执行，不白跑。
+            notes.append("没有小脸：③ 不跑，最终保存的是 ② 的图。")
+            txt = "\n".join(["小脸精修：" + n for n in notes])
+            try:
+                from comfy_execution.graph import ExecutionBlocker
+                blk = lambda: ExecutionBlocker(None)
+            except Exception:
+                blk = lambda: None
+            return (blk(), blk(), blk(), txt, False)
 
         # ── 逐张裁、放大；先算统一尺寸（一个批里的所有图必须一样大）──────────
         plans = []
@@ -400,7 +392,7 @@ class MOSSIdSmallFaceCrop:
                            "裁片遮罩是按每个人的脸框单独算的（已扣掉别人的脸框），接 SetLatentNoiseMask，保证只重画自己这个头。"])
         return (torch.from_numpy(np.stack(crops)).float().div_(255.0),
                 torch.from_numpy(np.stack(masks)),
-                region, txt)
+                region, txt, True)
 
 
 class MOSSIdSmallFacePaste:

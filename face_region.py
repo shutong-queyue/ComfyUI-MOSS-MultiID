@@ -13,6 +13,7 @@
 """
 
 import json
+import os
 
 import numpy as np
 import torch
@@ -167,11 +168,114 @@ def _ellipse(H, W, cx, cy, rx, ry):
     return m
 
 
-def _faces(bgr):
+def _iou(a, b):
+    x0, y0 = max(a[0], b[0]), max(a[1], b[1])
+    x1, y1 = min(a[2], b[2]), min(a[3], b[3])
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+    inter = (x1 - x0) * (y1 - y0)
+    ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return float(inter / max(1e-6, ua))
+
+
+def _detect_scales(app, img, scales):
+    """按给定的 (尺寸, 阈值) 依次检，返回合并去重后的原始结果。"""
+    cand = []
+    for s, th in scales:
+        try:
+            # insightface 默认只允许设置一次 det_size；换尺度前先清掉，否则第二遍会被忽略
+            if getattr(app, "det_model", None) is not None:
+                app.det_model.input_size = None
+            app.prepare(ctx_id=0, det_size=s, det_thresh=th)
+        except Exception:
+            pass
+        try:
+            cand += list(app.get(img))
+        except Exception:
+            continue
+    cand.sort(key=lambda f: -float(f.det_score))
+    keep = []
+    for f in cand:
+        if all(_iou(f.bbox, k.bbox) < 0.35 for k in keep):
+            keep.append(f)
+    return keep
+
+
+_YOLO_CACHE = {}
+
+
+def _yolo_face_boxes(bgr):
+    """用 YOLO 人脸模型补检（动漫/侧脸时 insightface 容易漏）。
+
+    只在 ultralytics 和 face_yolov8*.pt 都在的时候启用；没有就安静跳过。
+    返回 [{cx,cy,w,h,conf}]，不做识别嵌入（接参考脸时不会走这条路）。
+    """
+    try:
+        from ultralytics import YOLO
+    except Exception:
+        return []
+    path = None
+    try:
+        import folder_paths
+        roots = list(folder_paths.get_folder_paths("ultralytics_bbox")) if hasattr(folder_paths, "get_folder_paths") else []
+        roots += [os.path.join(folder_paths.models_dir, "ultralytics", "bbox")]
+    except Exception:
+        roots = [os.path.join(_self_check_mod().MODELS, "ultralytics", "bbox")]
+    for r in roots:
+        for fn in ("face_yolov8n.pt", "face_yolov8m.pt"):
+            q = os.path.join(r, fn)
+            if os.path.exists(q):
+                path = q
+                break
+        if path:
+            break
+    if not path:
+        return []
+    model = _YOLO_CACHE.get(path)
+    if model is None:
+        try:
+            model = YOLO(path)
+            _YOLO_CACHE[path] = model
+        except Exception:
+            return []
+    try:
+        res = model.predict(bgr, conf=0.75, verbose=False)[0]
+    except Exception:
+        return []
+    out = []
+    for b in getattr(res, "boxes", []):
+        x0, y0, x1, y1 = [float(v) for v in b.xyxy[0].tolist()]
+        out.append({"cx": (x0 + x1) / 2, "cy": (y0 + y1) / 2,
+                    "w": x1 - x0, "h": y1 - y0, "conf": float(b.conf[0])})
+    return out
+
+
+def _faces(bgr, mode="写实（真人照片）", allow_yolo=True):
+    """检脸。写实走 insightface（真人脸），动漫/3D 走 YOLO 人脸。
+
+    写实：多尺度 insightface；长边 >1280 再补 1600；一张都没检到再回退 512/768。
+    动漫：先确保 YOLO 人脸模型在（缺失时自动下载），YOLO 检到就用它的框；
+          YOLO 没检到再退回 insightface，避免一张都出不来。
+    """
     app = _app()
+    anime = "动漫" in str(mode)
     out = []
     for i in range(bgr.shape[0]):
-        for f in app.get(bgr[i]):
+        img = bgr[i]
+        if anime and allow_yolo:
+            yb = _yolo_face_boxes(img)
+            if yb:
+                for f in yb:
+                    out.append({"cx": f["cx"], "cy": f["cy"], "w": f["w"], "h": f["h"],
+                                "emb": np.zeros(512, np.float32), "conf": f["conf"]})
+                continue
+        scales = [((1024, 1024), 0.5)]
+        if max(img.shape[:2]) > 1280:
+            scales.append(((1600, 1600), 0.5))
+        keep = _detect_scales(app, img, scales)
+        if not keep:
+            keep = _detect_scales(app, img, [((512, 512), 0.5), ((768, 768), 0.35)])
+        for f in keep:
             box = f.bbox.astype(np.float32)
             e = f.embedding.astype(np.float32)
             out.append({"cx": float((box[0] + box[2]) / 2), "cy": float((box[1] + box[3]) / 2),
@@ -311,6 +415,10 @@ class MOSSIdFaceRegionMap:
                                                       "下载（约 309MB，只一次）；下载失败会在说明里说一声。\n"
                                                       "选到标『需外接节点』『格式不支持』的（例如手头的 SAM3），"
                                                       "本节点不会假装支持，说明里会给出确切的两步接法。"}),
+                "画面类型": (["写实（真人照片）", "动漫（插画/3D）"], {"default": "写实（真人照片）",
+                    "tooltip": "写实用 insightface 真人脸模型（默认）；\n"
+                               "动漫/3D 渲染用 YOLO 人脸，选它时如果本机没有模型会自动下载一次（约 6MB）。\n"
+                               "动漫模式不做『参考脸』相似度比对。"}),
             },
             "optional": {
                 "遮罩": ("MASK", {
@@ -331,8 +439,8 @@ class MOSSIdFaceRegionMap:
             },
         }
 
-    RETURN_TYPES = ("REGION_MAP", "STRING", "IMAGE", "MASK")
-    RETURN_NAMES = ("地盘数据", "指派说明", "地盘可视化", "小脸遮罩")
+    RETURN_TYPES = ("REGION_MAP", "STRING", "IMAGE", "MASK", "BOOLEAN")
+    RETURN_NAMES = ("地盘数据", "指派说明", "地盘可视化", "小脸遮罩", "有脸")
     FUNCTION = "build"
     CATEGORY = "MOSS多身份"
     DESCRIPTION = "按草稿图里真实人脸位置分地盘；可接遮罩只算人身上的像素；脸被挡住时自动退回备用方框"
@@ -346,7 +454,7 @@ class MOSSIdFaceRegionMap:
     }
 
     def build(self, 草稿图, 画布宽, 画布高, 归属半径, 边界抹软像素, 角色名字, 谁是谁,
-               遮罩来源, 遮罩放大像素, SAM模型, 小脸精修上限=0,
+               遮罩来源, 遮罩放大像素, SAM模型, 小脸精修上限=0, 画面类型="写实（真人照片）",
                遮罩=None, 参考脸=None, 备用方框=None, 来源开关=None, **旧字段):
         if 来源开关:
             # 接了这个口就以它为准：工作流里用一个开关节点就能换来源，不用每次进节点改下拉
@@ -366,15 +474,40 @@ class MOSSIdFaceRegionMap:
         auto_cut = not str(遮罩来源).startswith(("不接", "外部"))
         env_lines = self._env_silent(auto_cut)
         sam_row = pm.sam_row(SAM模型)
-        sam_note = "SAM 模型：%s ｜ %s ｜ 本机路径：%s" % (
-            sam_row["相对路径"], sam_row["结论"], sam_row["绝对路径"])
+        sam_note = "SAM 模型：%s ｜ %s" % (
+            sam_row["相对路径"], sam_row["结论"])
         names = [s.strip() for s in str(角色名字).replace("，", ",").split(",") if s.strip()]
+        yolo_note = ""
+        if "动漫" in str(画面类型):
+            try:
+                _p, _msg = _self_check_mod().ensure_yolo_face()
+                yolo_note = "画面类型：动漫｜YOLO 人脸（%s）" % _msg
+                if _p is None:
+                    yolo_note += "｜没下成功，本次退回 insightface"
+            except Exception as exc:
+                yolo_note = "画面类型：动漫｜YOLO 人脸准备失败（%s），本次退回 insightface" % type(exc).__name__
         draft = _to_bgr(草稿图)
         refs = _to_bgr(参考脸) if 参考脸 is not None else None
-        dfaces = _faces(draft)
+        dfaces = _faces(draft, mode=画面类型, allow_yolo=(refs is None))
         if not dfaces:
-            raise RuntimeError("草稿图里一张脸都没检到。要么这张图里确实没有正脸，"
-                               "要么换一张脸看得清的草稿（第一趟不带人物滤镜出的那张）。")
+            # 一张脸都没检到：给一份“没有主人”的空地盘（不阻断），
+            # ② 开关会据此直通到 ①，③ 也因此拿不到裁片而直通，最终仍能保存。
+            Wc, Hc = int(画布宽), int(画布高)
+            gw, gh = max(1, Wc // DS), max(1, Hc // DS)
+            empty_region = {
+                "grid_w": gw, "grid_h": gh, "n_img": gw * gh, "ds": DS,
+                "canvas": (Wc, Hc), "boxes": [],
+                "weight": torch.zeros((1, gw * gh)),
+                "owner": torch.zeros((gh, gw), dtype=torch.int8),
+                "feather": int(边界抹软像素), "mode": "没人脸",
+                "小脸上限": int(小脸精修上限),
+            }
+            blank = torch.zeros((1, Hc, Wc, 3), dtype=torch.float32)
+            zero_mask = torch.zeros((1, Hc, Wc), dtype=torch.float32)
+            return (empty_region,
+                    "这张图里一张脸都没检到：② 不跑，最终保存的是 ① 的草稿。"
+                    "换个脸看得清的图，或者改用「地盘分配器」按方框分区。",
+                    blank, zero_mask, False)
 
         # 人数＝「角色名字填的个数」和「草稿里检到的脸数」里取多的那个：
         # 名字留空＝全自动（检到几张脸就几个人）；只填两个名字但画面里有 8 个人，
@@ -692,6 +825,7 @@ class MOSSIdFaceRegionMap:
                  + (f"，参考脸 {min(n_people, refs.shape[0]) if refs is not None else 0} 张" if refs is not None
                     else "，没接参考脸（只有体检分没有，地盘照分）"),
                  auto_note,
+                 *([yolo_note] if yolo_note else []),
                  # 选了自动切却没切成（模型不认 / 切失败），这一行必须把原因顶上去，
                  # 不许退化成「不接遮罩」——那等于把话吞了
                  "遮罩来源：%s%s" % (mask_src if (auto_cut or mask_tensor is not None)
@@ -852,7 +986,7 @@ class MOSSIdFaceRegionMap:
         if small_notes:
             lines += [""] + ["小脸精修：" + n for n in small_notes]
 
-        return (region, "\n".join(lines), vis, small_mask)
+        return (region, "\n".join(lines), vis, small_mask, True)
 
 
 NODE_CLASS_MAPPINGS = {"MOSSIdFaceRegionMap": MOSSIdFaceRegionMap}

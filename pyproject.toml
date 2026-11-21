@@ -1,7 +1,7 @@
 [project]
 name = "moss-multiid"
 description = "Regional LoRA for MOSS-Image: each LoRA only acts inside the region you assign, so multiple character LoRAs stop cross-contaminating faces."
-version = "1.0.2"
+version = "1.0.3"
 license = { file = "LICENSE" }
 classifiers = [
     "Operating System :: Microsoft :: Windows",
